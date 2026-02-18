@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=TrustTunnel Tray
+Comment=System tray agent for TrustTunnel VPN
+Exec=/opt/trusttunnel_client/trusttunnel-tray
+Icon=network-vpn
+Terminal=false
+Categories=Network;System;
+X-KDE-autostart-phase=2
