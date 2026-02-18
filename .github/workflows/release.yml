@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install dependencies
+        run: pacman -Syu --noconfirm base-devel cmake qt6-base qt6-svg git
+
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Package release archive
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE="trusttunnel-tray-${VERSION}.tar.gz"
+          mkdir -p pkg
+          cp build/trusttunnel-tray pkg/
+          cp trusttunnel-tray.desktop pkg/
+          cp trusttunnel-agent.policy pkg/
+          cp install.sh pkg/
+          tar -czf "${ARCHIVE}" -C pkg .
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: TrustTunnel Tray Agent v${{ env.VERSION }}
+          files: ${{ env.ARCHIVE }}
+          generate_release_notes: true
