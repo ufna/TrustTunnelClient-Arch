@@ -22,7 +22,7 @@ private slots:
 private:
     enum class State { Connected, Disconnected, Transitioning };
 
-    QIcon makeIcon(const QColor &color);
+    QIcon makeIcon(const QColor &dotColor);
     bool isServiceActive();
     bool isTunUp();
     void runPrivileged(const QStringList &args);
