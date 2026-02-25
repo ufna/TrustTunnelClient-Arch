@@ -2,6 +2,8 @@
 
 System tray agent for managing `trusttunnel.service` on Arch Linux. Built with C++17 and Qt6.
 
+![TrustTunnel Tray Agent](screenshot.jpg)
+
 ## Features
 
 - Tray icon with color status: green (connected), red (disconnected), yellow (transitioning)
