@@ -8,15 +8,14 @@ System tray agent for managing `trusttunnel.service` on Arch Linux. Built with C
 
 - Tray icon with color status: green (connected), red (disconnected), yellow (transitioning)
 - Polls `systemctl is-active trusttunnel` + `/sys/class/net/tun0` every 3 seconds
-- Enable/Disable/Restart service via `pkexec` (polkit authentication)
+- Enable/Disable/Restart service via D-Bus (polkit authentication, password remembered for session)
 - Edit config file (`/opt/trusttunnel_client/trusttunnel_client.toml`) via `xdg-open`
 - View live logs in terminal (konsole/gnome-terminal/xterm)
 
 ## Dependencies
 
-- Qt6 (Widgets)
+- Qt6 (Widgets, DBus)
 - CMake >= 3.16
-- polkit (for privileged service management)
 
 On Arch Linux:
 
@@ -40,8 +39,11 @@ cmake --build build
 This will:
 1. Build the binary
 2. Copy it to `/opt/trusttunnel_client/trusttunnel-tray`
-3. Install polkit policy for passwordless service management
-4. Set up autostart via `~/.config/autostart/`
+3. Set up autostart via `~/.config/autostart/`
+
+Service management uses systemd's built-in polkit policy
+(`org.freedesktop.systemd1.manage-units`). The first action per session
+will ask for your password; subsequent actions require no re-authentication.
 
 ## Run
 
@@ -60,5 +62,4 @@ src/TrayAgent.h             — TrayAgent class declaration
 src/TrayAgent.cpp           — TrayAgent implementation
 install.sh                  — Installation script
 trusttunnel-tray.desktop    — Autostart desktop entry
-trusttunnel-agent.policy    — Polkit policy for systemctl
 ```
