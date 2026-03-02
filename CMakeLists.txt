@@ -5,11 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets SvgWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets SvgWidgets DBus)
 
 add_executable(trusttunnel-tray
     src/main.cpp
     src/TrayAgent.cpp
 )
 
-target_link_libraries(trusttunnel-tray PRIVATE Qt6::Widgets Qt6::SvgWidgets)
+target_link_libraries(trusttunnel-tray PRIVATE Qt6::Widgets Qt6::SvgWidgets Qt6::DBus)

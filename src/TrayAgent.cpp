@@ -7,6 +7,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QSvgRenderer>
+#include <QDBusInterface>
 
 TrayAgent::TrayAgent(QObject *parent)
     : QObject(parent)
@@ -101,9 +102,14 @@ bool TrayAgent::isTunUp()
     return QFileInfo::exists("/sys/class/net/tun0");
 }
 
-void TrayAgent::runPrivileged(const QStringList &args)
+void TrayAgent::runDBus(const QString &method)
 {
-    QProcess::startDetached("pkexec", args);
+    QDBusInterface iface(
+        "org.freedesktop.systemd1",
+        "/org/freedesktop/systemd1",
+        "org.freedesktop.systemd1.Manager",
+        QDBusConnection::systemBus());
+    iface.asyncCall(method, QString(SERVICE_NAME) + ".service", QString("replace"));
 }
 
 void TrayAgent::setTransitioning()
@@ -152,14 +158,13 @@ void TrayAgent::updateTray()
 void TrayAgent::onToggle()
 {
     setTransitioning();
-    QString action = m_connected ? "stop" : "start";
-    runPrivileged({"systemctl", action, SERVICE_NAME});
+    runDBus(m_connected ? "StopUnit" : "StartUnit");
 }
 
 void TrayAgent::onRestart()
 {
     setTransitioning();
-    runPrivileged({"systemctl", "restart", SERVICE_NAME});
+    runDBus("RestartUnit");
 }
 
 void TrayAgent::onEditConfig()

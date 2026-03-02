@@ -25,7 +25,7 @@ private:
     QIcon makeIcon(const QColor &dotColor);
     bool isServiceActive();
     bool isTunUp();
-    void runPrivileged(const QStringList &args);
+    void runDBus(const QString &method);
     void setTransitioning();
     void updateTray();
 
