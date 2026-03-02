@@ -30,7 +30,6 @@ jobs:
           mkdir -p pkg
           cp build/trusttunnel-tray pkg/
           cp trusttunnel-tray.desktop pkg/
-          cp trusttunnel-agent.policy pkg/
           cp install.sh pkg/
           tar -czf "${ARCHIVE}" -C pkg .
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
