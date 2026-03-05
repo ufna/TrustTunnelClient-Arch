@@ -19,12 +19,13 @@ cmake -B build -DCMAKE_PREFIX_PATH="$(brew --prefix qt)" && cmake --build build
 - **Single class design**: `TrayAgent` (QObject) owns `QSystemTrayIcon`, `QMenu`, `QTimer`
 - Icons are drawn at runtime via `QPainter` + `QSvgRenderer` on 64x64 `QPixmap` (no icon files needed)
 - Platform-specific code via `#ifdef Q_OS_LINUX` / `#ifdef Q_OS_MACOS`
+- D-Bus/launchctl errors shown as tray notifications + `qWarning()`
 - Status polling every 3s
 - Transitioning state (yellow icon) auto-clears after poll interval + 1s
 
 ### Linux specifics
 
-- Service control via Qt D-Bus (`org.freedesktop.systemd1.Manager`)
+- Service control via Qt D-Bus (`org.freedesktop.systemd1.Manager`) with interactive auth
 - Status: `systemctl is-active trusttunnel` + `/sys/class/net/tun0`
 - Polkit: uses systemd's built-in `org.freedesktop.systemd1.manage-units` (auth_admin_keep)
 
