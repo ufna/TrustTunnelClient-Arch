@@ -1,32 +1,63 @@
 # TrustTunnel Tray Agent
 
-System tray agent for managing `trusttunnel.service` on Arch Linux. Built with C++17 and Qt6.
+Cross-platform system tray agent for managing the TrustTunnel VPN client. Built with C++17 and Qt6. Supports **Arch Linux** and **macOS**.
 
 ![TrustTunnel Tray Agent](screenshot.jpg)
 
 ## Features
 
 - Tray icon with color status: green (connected), red (disconnected), yellow (transitioning)
-- Polls `systemctl is-active trusttunnel` + `/sys/class/net/tun0` every 3 seconds
-- Enable/Disable/Restart service via D-Bus (polkit authentication, password remembered for session)
-- Edit config file (`/opt/trusttunnel_client/trusttunnel_client.toml`) via `xdg-open`
-- View live logs in terminal (konsole/gnome-terminal/xterm)
+- Enable/Disable/Restart the VPN client
+- Edit config file (`trusttunnel_client.toml`)
+- View live logs
+- Status polling every 3 seconds
+
+### Linux (Arch)
+
+- Service control via D-Bus (`org.freedesktop.systemd1.Manager`)
+- Status: `systemctl is-active` + `/sys/class/net/tun0`
+- Logs via `journalctl` in konsole/gnome-terminal/xterm
+- Autostart via `~/.config/autostart/` desktop entry
+
+### macOS
+
+- Service control via `launchctl` (LaunchDaemon)
+- Status: `pgrep` + utun interface with IPv4 address
+- Logs via `tail -f` in Terminal.app
+- VPN autostart via LaunchDaemon (runs at boot, auto-restarts on crash)
+- Tray autostart via LaunchAgent (runs at login)
+- `.app` bundle with `LSUIElement` (no Dock icon)
 
 ## Dependencies
 
-- Qt6 (Widgets, DBus)
+- Qt6 (Widgets, SvgWidgets; + DBus on Linux)
 - CMake >= 3.16
 
-On Arch Linux:
+### Arch Linux
 
 ```bash
-sudo pacman -S qt6-base cmake
+sudo pacman -S qt6-base qt6-svg cmake
+```
+
+### macOS
+
+```bash
+brew install qt@6 cmake
 ```
 
 ## Build
 
+### Linux
+
 ```bash
 cmake -B build
+cmake --build build
+```
+
+### macOS
+
+```bash
+cmake -B build -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
 cmake --build build
 ```
 
@@ -36,30 +67,59 @@ cmake --build build
 ./install.sh
 ```
 
-This will:
-1. Build the binary
-2. Copy it to `/opt/trusttunnel_client/trusttunnel-tray`
-3. Set up autostart via `~/.config/autostart/`
+The script detects the platform automatically.
 
-Service management uses systemd's built-in polkit policy
-(`org.freedesktop.systemd1.manage-units`). The first action per session
-will ask for your password; subsequent actions require no re-authentication.
+### What it does on Linux
 
-## Run
+1. Builds the binary
+2. Copies `trusttunnel-tray` to `/opt/trusttunnel_client/`
+3. Sets up autostart via `~/.config/autostart/trusttunnel-tray.desktop`
+
+Service management uses systemd's built-in polkit policy (`org.freedesktop.systemd1.manage-units`). The first action per session will ask for your password; subsequent actions require no re-authentication.
+
+### What it does on macOS
+
+1. Builds the `.app` bundle
+2. Copies `trusttunnel-tray.app` to `/opt/trusttunnel_client/`
+3. Installs LaunchDaemon (`com.trusttunnel.client`) for VPN auto-start at boot
+4. Installs LaunchAgent (`com.trusttunnel.tray`) for tray auto-start at login
+
+After install, start without rebooting:
 
 ```bash
-./build/trusttunnel-tray
+sudo launchctl load -w /Library/LaunchDaemons/com.trusttunnel.client.plist
+launchctl load ~/Library/LaunchAgents/com.trusttunnel.tray.plist
 ```
 
-The agent starts automatically on login after installation.
+## Uninstall
+
+### Linux
+
+```bash
+sudo rm /opt/trusttunnel_client/trusttunnel-tray
+rm ~/.config/autostart/trusttunnel-tray.desktop
+```
+
+### macOS
+
+```bash
+sudo launchctl unload /Library/LaunchDaemons/com.trusttunnel.client.plist
+launchctl unload ~/Library/LaunchAgents/com.trusttunnel.tray.plist
+sudo rm /Library/LaunchDaemons/com.trusttunnel.client.plist
+rm ~/Library/LaunchAgents/com.trusttunnel.tray.plist
+sudo rm -rf /opt/trusttunnel_client/trusttunnel-tray.app
+```
 
 ## Project Structure
 
 ```
-CMakeLists.txt              — Build configuration
-src/main.cpp                — Entry point
-src/TrayAgent.h             — TrayAgent class declaration
-src/TrayAgent.cpp           — TrayAgent implementation
-install.sh                  — Installation script
-trusttunnel-tray.desktop    — Autostart desktop entry
+CMakeLists.txt                  - Build configuration (multi-platform)
+Info.plist                      - macOS app bundle config (LSUIElement)
+src/main.cpp                    - Entry point
+src/TrayAgent.h                 - TrayAgent class declaration
+src/TrayAgent.cpp               - TrayAgent implementation (#ifdef per platform)
+install.sh                      - Cross-platform installation script
+trusttunnel-tray.desktop        - Linux autostart desktop entry
+com.trusttunnel.client.plist    - macOS LaunchDaemon (VPN at boot)
+com.trusttunnel.tray.plist      - macOS LaunchAgent (tray at login)
 ```

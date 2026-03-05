@@ -25,9 +25,15 @@ private:
     QIcon makeIcon(const QColor &dotColor);
     bool isServiceActive();
     bool isTunUp();
-    void runDBus(const QString &method);
     void setTransitioning();
     void updateTray();
+
+#ifdef Q_OS_LINUX
+    void runDBus(const QString &method);
+#endif
+#ifdef Q_OS_MACOS
+    void runLaunchctl(const QString &action);
+#endif
 
     QSystemTrayIcon *m_trayIcon;
     QMenu *m_menu;
@@ -43,7 +49,15 @@ private:
     State m_state = State::Disconnected;
     bool m_connected = false;
 
-    static constexpr const char *SERVICE_NAME = "trusttunnel";
     static constexpr const char *CONFIG_PATH = "/opt/trusttunnel_client/trusttunnel_client.toml";
     static constexpr int POLL_INTERVAL_MS = 3000;
+
+#ifdef Q_OS_LINUX
+    static constexpr const char *SERVICE_NAME = "trusttunnel";
+#endif
+#ifdef Q_OS_MACOS
+    static constexpr const char *DAEMON_LABEL = "com.trusttunnel.client";
+    static constexpr const char *DAEMON_PLIST = "/Library/LaunchDaemons/com.trusttunnel.client.plist";
+    static constexpr const char *LOG_PATH = "/opt/trusttunnel_client/trusttunnel.log";
+#endif
 };

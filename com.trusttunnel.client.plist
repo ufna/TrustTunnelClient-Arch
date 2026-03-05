@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.trusttunnel.client</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/trusttunnel_client/trusttunnel_client</string>
+        <string>-c</string>
+        <string>/opt/trusttunnel_client/trusttunnel_client.toml</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/opt/trusttunnel_client/trusttunnel.log</string>
+    <key>StandardErrorPath</key>
+    <string>/opt/trusttunnel_client/trusttunnel.log</string>
+</dict>
+</plist>

@@ -7,12 +7,15 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QSvgRenderer>
+#include <QDebug>
+
+#ifdef Q_OS_LINUX
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusPendingCall>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
-#include <QDebug>
+#endif
 
 TrayAgent::TrayAgent(QObject *parent)
     : QObject(parent)
@@ -94,6 +97,9 @@ QIcon TrayAgent::makeIcon(const QColor &dotColor)
     return QIcon(pixmap);
 }
 
+// --- Platform-specific: service status ---
+
+#ifdef Q_OS_LINUX
 bool TrayAgent::isServiceActive()
 {
     QProcess proc;
@@ -101,12 +107,42 @@ bool TrayAgent::isServiceActive()
     proc.waitForFinished(3000);
     return proc.readAllStandardOutput().trimmed() == "active";
 }
+#endif
 
+#ifdef Q_OS_MACOS
+bool TrayAgent::isServiceActive()
+{
+    QProcess proc;
+    proc.start("pgrep", {"-x", "trusttunnel_client"});
+    proc.waitForFinished(3000);
+    return proc.exitCode() == 0;
+}
+#endif
+
+// --- Platform-specific: tunnel interface check ---
+
+#ifdef Q_OS_LINUX
 bool TrayAgent::isTunUp()
 {
     return QFileInfo::exists("/sys/class/net/tun0");
 }
+#endif
 
+#ifdef Q_OS_MACOS
+bool TrayAgent::isTunUp()
+{
+    // System utun interfaces (iCloud, etc.) only have link-local IPv6.
+    // TrustTunnel's utun has an IPv4 address — look for that.
+    QProcess proc;
+    proc.start("bash", {"-c", "ifconfig | grep -B2 'inet ' | grep -q '^utun'"});
+    proc.waitForFinished(3000);
+    return proc.exitCode() == 0;
+}
+#endif
+
+// --- Platform-specific: service control ---
+
+#ifdef Q_OS_LINUX
 void TrayAgent::runDBus(const QString &method)
 {
     QDBusMessage msg = QDBusMessage::createMethodCall(
@@ -129,6 +165,42 @@ void TrayAgent::runDBus(const QString &method)
         }
     });
 }
+#endif
+
+#ifdef Q_OS_MACOS
+void TrayAgent::runLaunchctl(const QString &action)
+{
+    // Use osascript to run launchctl with admin privileges
+    QString cmd;
+    if (action == "start") {
+        cmd = QString("launchctl load -w %1").arg(DAEMON_PLIST);
+    } else if (action == "stop") {
+        cmd = QString("launchctl unload %1").arg(DAEMON_PLIST);
+    } else if (action == "restart") {
+        cmd = QString("launchctl unload %1; launchctl load -w %1").arg(DAEMON_PLIST);
+    }
+
+    QString script = QString("do shell script \"%1\" with administrator privileges").arg(cmd);
+
+    auto *proc = new QProcess(this);
+    connect(proc, qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
+            this, [this, proc](int exitCode, QProcess::ExitStatus) {
+        proc->deleteLater();
+        if (exitCode != 0) {
+            QString err = proc->readAllStandardError().trimmed();
+            if (!err.isEmpty()) {
+                qWarning() << "launchctl failed:" << err;
+                m_trayIcon->showMessage("TrustTunnel", "Error: " + err,
+                                        QSystemTrayIcon::Critical, 5000);
+            }
+        }
+    });
+
+    proc->start("osascript", {"-e", script});
+}
+#endif
+
+// --- Common ---
 
 void TrayAgent::setTransitioning()
 {
@@ -173,6 +245,9 @@ void TrayAgent::updateTray()
     }
 }
 
+// --- Platform-specific: toggle/restart ---
+
+#ifdef Q_OS_LINUX
 void TrayAgent::onToggle()
 {
     setTransitioning();
@@ -184,16 +259,41 @@ void TrayAgent::onRestart()
     setTransitioning();
     runDBus("RestartUnit");
 }
+#endif
 
-void TrayAgent::onEditConfig()
+#ifdef Q_OS_MACOS
+void TrayAgent::onToggle()
 {
-    // Open as text/plain so xdg-open always finds a text editor,
-    // even if application/toml has no registered handler.
-    QProcess::startDetached("xdg-open", {CONFIG_PATH});
-    // If xdg-open fails for toml, fall back: set the MIME default once
-    // with: xdg-mime default sublime_text.desktop application/toml
+    setTransitioning();
+    runLaunchctl(m_connected ? "stop" : "start");
 }
 
+void TrayAgent::onRestart()
+{
+    setTransitioning();
+    runLaunchctl("restart");
+}
+#endif
+
+// --- Platform-specific: edit config ---
+
+#ifdef Q_OS_LINUX
+void TrayAgent::onEditConfig()
+{
+    QProcess::startDetached("xdg-open", {CONFIG_PATH});
+}
+#endif
+
+#ifdef Q_OS_MACOS
+void TrayAgent::onEditConfig()
+{
+    QProcess::startDetached("open", {"-t", CONFIG_PATH});
+}
+#endif
+
+// --- Platform-specific: view logs ---
+
+#ifdef Q_OS_LINUX
 void TrayAgent::onViewLogs()
 {
     struct TermCmd {
@@ -213,3 +313,16 @@ void TrayAgent::onViewLogs()
         }
     }
 }
+#endif
+
+#ifdef Q_OS_MACOS
+void TrayAgent::onViewLogs()
+{
+    QString script = QString(
+        "tell application \"Terminal\"\n"
+        "    do script \"tail -f %1\"\n"
+        "    activate\n"
+        "end tell").arg(LOG_PATH);
+    QProcess::startDetached("osascript", {"-e", script});
+}
+#endif
