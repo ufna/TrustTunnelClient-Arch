@@ -20,7 +20,7 @@ Cross-platform system tray agent for managing the TrustTunnel VPN client. Built 
 - Service control via D-Bus (`org.freedesktop.systemd1.Manager`)
 - Status: `systemctl is-active` + `/sys/class/net/tun0`
 - Logs via `journalctl` in konsole/gnome-terminal/xterm
-- Autostart via `~/.config/autostart/` desktop entry
+- Autostart via `/etc/xdg/autostart/` desktop entry (PKGBUILD) or `~/.config/autostart/` (manual)
 
 ### macOS
 
@@ -66,33 +66,32 @@ cmake --build build
 
 ## Install
 
+### Arch Linux (recommended)
+
 ```bash
-./install.sh
+makepkg -si
 ```
 
-The script detects the platform automatically.
+This builds and installs the `trusttunnel-tray` package with proper Arch paths:
+- Binary: `/usr/bin/trusttunnel-tray`
+- Systemd service: `/usr/lib/systemd/system/trusttunnel.service`
+- Autostart: `/etc/xdg/autostart/trusttunnel-tray.desktop`
 
-### What it does on Linux
-
-1. Builds the binary
-2. Copies `trusttunnel-tray` to `/opt/trusttunnel_client/`
-3. Installs systemd service (`trusttunnel.service`) for VPN auto-start at boot
-4. Sets up autostart via `~/.config/autostart/trusttunnel-tray.desktop`
-
-After install, start the VPN service:
+After install, enable and start the VPN service:
 
 ```bash
-sudo systemctl start trusttunnel
+sudo systemctl enable --now trusttunnel
 ```
 
 Service management uses systemd's built-in polkit policy (`org.freedesktop.systemd1.manage-units`). The first action per session will ask for your password; subsequent actions require no re-authentication.
 
-### What it does on macOS
+### macOS
 
-1. Builds the `.app` bundle
-2. Copies `trusttunnel-tray.app` to `/opt/trusttunnel_client/`
-3. Installs LaunchDaemon (`com.trusttunnel.client`) for VPN auto-start at boot
-4. Installs LaunchAgent (`com.trusttunnel.tray`) for tray auto-start at login
+```bash
+./install.sh
+```
+
+The script builds the `.app` bundle, copies it to `/opt/trusttunnel_client/`, and installs LaunchDaemon + LaunchAgent for auto-start.
 
 After install, start without rebooting:
 
@@ -105,7 +104,13 @@ launchctl load ~/Library/LaunchAgents/com.trusttunnel.tray.plist
 
 ## Uninstall
 
-### Linux
+### Arch Linux
+
+```bash
+pacman -R trusttunnel-tray
+```
+
+### Linux (manual install)
 
 ```bash
 sudo systemctl disable --now trusttunnel.service
@@ -129,11 +134,12 @@ sudo rm -rf /opt/trusttunnel_client/trusttunnel-tray.app
 
 ```
 CMakeLists.txt                  - Build configuration (multi-platform)
+PKGBUILD                        - Arch Linux package build script
 Info.plist                      - macOS app bundle config (LSUIElement)
 src/main.cpp                    - Entry point
 src/TrayAgent.h                 - TrayAgent class declaration
 src/TrayAgent.cpp               - TrayAgent implementation (#ifdef per platform)
-install.sh                      - Cross-platform installation script
+install.sh                      - Cross-platform installation script (fallback)
 trusttunnel.service             - Linux systemd service (VPN at boot)
 trusttunnel-tray.desktop        - Linux autostart desktop entry
 com.trusttunnel.client.plist    - macOS LaunchDaemon (VPN at boot)
