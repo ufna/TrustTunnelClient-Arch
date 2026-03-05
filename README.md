@@ -2,7 +2,10 @@
 
 Cross-platform system tray agent for managing the TrustTunnel VPN client. Built with C++17 and Qt6. Supports **Arch Linux** and **macOS**.
 
-![TrustTunnel Tray Agent](screenshot.jpg)
+<p>
+  <img src="screenshot.jpg" alt="Linux" width="400">
+  <img src="screenshot-mac.png" alt="macOS" width="400">
+</p>
 
 ## Features
 
