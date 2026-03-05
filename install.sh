@@ -42,13 +42,23 @@ else
     sudo cp "${SCRIPT_DIR}/build/trusttunnel-tray" "${INSTALL_DIR}/trusttunnel-tray"
     sudo chmod +x "${INSTALL_DIR}/trusttunnel-tray"
 
-    echo "[3/3] Setting up autostart..."
+    echo "[3/3] Setting up services..."
+
+    # systemd service for VPN client (runs as root)
+    sudo cp "${SCRIPT_DIR}/trusttunnel.service" /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl enable trusttunnel.service
+
+    # Desktop autostart for tray icon (runs as user at login)
     mkdir -p "${HOME}/.config/autostart"
     cp "${SCRIPT_DIR}/trusttunnel-tray.desktop" "${HOME}/.config/autostart/trusttunnel-tray.desktop"
 
     echo ""
-    echo "Done! You can start the tray agent now with:"
+    echo "Done! To start the VPN service now:"
+    echo "  sudo systemctl start trusttunnel"
+    echo ""
+    echo "To start the tray agent now:"
     echo "  ${INSTALL_DIR}/trusttunnel-tray"
     echo ""
-    echo "It will also auto-start on next login."
+    echo "Both will auto-start on next boot/login."
 fi

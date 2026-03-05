@@ -76,7 +76,14 @@ The script detects the platform automatically.
 
 1. Builds the binary
 2. Copies `trusttunnel-tray` to `/opt/trusttunnel_client/`
-3. Sets up autostart via `~/.config/autostart/trusttunnel-tray.desktop`
+3. Installs systemd service (`trusttunnel.service`) for VPN auto-start at boot
+4. Sets up autostart via `~/.config/autostart/trusttunnel-tray.desktop`
+
+After install, start the VPN service:
+
+```bash
+sudo systemctl start trusttunnel
+```
 
 Service management uses systemd's built-in polkit policy (`org.freedesktop.systemd1.manage-units`). The first action per session will ask for your password; subsequent actions require no re-authentication.
 
@@ -101,6 +108,9 @@ launchctl load ~/Library/LaunchAgents/com.trusttunnel.tray.plist
 ### Linux
 
 ```bash
+sudo systemctl disable --now trusttunnel.service
+sudo rm /etc/systemd/system/trusttunnel.service
+sudo systemctl daemon-reload
 sudo rm /opt/trusttunnel_client/trusttunnel-tray
 rm ~/.config/autostart/trusttunnel-tray.desktop
 ```
@@ -124,6 +134,7 @@ src/main.cpp                    - Entry point
 src/TrayAgent.h                 - TrayAgent class declaration
 src/TrayAgent.cpp               - TrayAgent implementation (#ifdef per platform)
 install.sh                      - Cross-platform installation script
+trusttunnel.service             - Linux systemd service (VPN at boot)
 trusttunnel-tray.desktop        - Linux autostart desktop entry
 com.trusttunnel.client.plist    - macOS LaunchDaemon (VPN at boot)
 com.trusttunnel.tray.plist      - macOS LaunchAgent (tray at login)
