@@ -7,7 +7,12 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QSvgRenderer>
-#include <QDBusInterface>
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDBusPendingCall>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
+#include <QDebug>
 
 TrayAgent::TrayAgent(QObject *parent)
     : QObject(parent)
@@ -104,12 +109,25 @@ bool TrayAgent::isTunUp()
 
 void TrayAgent::runDBus(const QString &method)
 {
-    QDBusInterface iface(
+    QDBusMessage msg = QDBusMessage::createMethodCall(
         "org.freedesktop.systemd1",
         "/org/freedesktop/systemd1",
         "org.freedesktop.systemd1.Manager",
-        QDBusConnection::systemBus());
-    iface.asyncCall(method, QString(SERVICE_NAME) + ".service", QString("replace"));
+        method);
+    msg << QString(SERVICE_NAME) + ".service" << QString("replace");
+    msg.setInteractiveAuthorizationAllowed(true);
+
+    auto pending = QDBusConnection::systemBus().asyncCall(msg);
+    auto *watcher = new QDBusPendingCallWatcher(pending, this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QDBusObjectPath> reply = *w;
+        if (reply.isError()) {
+            qWarning() << "D-Bus call failed:" << reply.error().name() << reply.error().message();
+            m_trayIcon->showMessage("TrustTunnel", "Service error: " + reply.error().message(),
+                                    QSystemTrayIcon::Critical, 5000);
+        }
+    });
 }
 
 void TrayAgent::setTransitioning()
