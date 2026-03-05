@@ -170,14 +170,13 @@ void TrayAgent::runDBus(const QString &method)
 #ifdef Q_OS_MACOS
 void TrayAgent::runLaunchctl(const QString &action)
 {
-    // Use osascript to run launchctl with admin privileges
     QString cmd;
     if (action == "start") {
         cmd = QString("launchctl load -w %1").arg(DAEMON_PLIST);
     } else if (action == "stop") {
         cmd = QString("launchctl unload %1").arg(DAEMON_PLIST);
     } else if (action == "restart") {
-        cmd = QString("launchctl unload %1; launchctl load -w %1").arg(DAEMON_PLIST);
+        cmd = QString("killall trusttunnel_client 2>/dev/null; sleep 1; launchctl unload %1 2>/dev/null; launchctl load -w %1").arg(DAEMON_PLIST);
     }
 
     QString script = QString("do shell script \"%1\" with administrator privileges").arg(cmd);

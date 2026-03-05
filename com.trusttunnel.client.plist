@@ -14,6 +14,8 @@
     <true/>
     <key>KeepAlive</key>
     <true/>
+    <key>WorkingDirectory</key>
+    <string>/opt/trusttunnel_client</string>
     <key>StandardOutPath</key>
     <string>/opt/trusttunnel_client/trusttunnel.log</string>
     <key>StandardErrorPath</key>

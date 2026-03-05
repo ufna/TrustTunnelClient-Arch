@@ -29,11 +29,12 @@ if [ "$OS" = "Darwin" ]; then
     sudo chmod 644 /Library/LaunchDaemons/com.trusttunnel.client.plist
 
     # LaunchAgent for tray icon (runs as user at login)
+    mkdir -p ~/Library/LaunchAgents
     cp "${SCRIPT_DIR}/com.trusttunnel.tray.plist" ~/Library/LaunchAgents/
 
     echo ""
     echo "Done! To start now without rebooting:"
-    echo "  sudo launchctl load /Library/LaunchDaemons/com.trusttunnel.client.plist"
+    echo "  sudo launchctl load -w /Library/LaunchDaemons/com.trusttunnel.client.plist"
     echo "  launchctl load ~/Library/LaunchAgents/com.trusttunnel.tray.plist"
     echo ""
     echo "Both will auto-start on next boot/login."

@@ -35,6 +35,7 @@ cmake -B build -DCMAKE_PREFIX_PATH="$(brew --prefix qt)" && cmake --build build
 - `.app` bundle with `LSUIElement=true` (no Dock icon)
 - LaunchDaemon (`com.trusttunnel.client`) for VPN auto-start at boot with `KeepAlive`
 - LaunchAgent (`com.trusttunnel.tray`) for tray auto-start at login
+- Only one trusttunnel_client instance can run (route/tun conflict if duplicated)
 
 ## Key Paths
 

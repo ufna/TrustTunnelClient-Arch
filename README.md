@@ -91,6 +91,8 @@ sudo launchctl load -w /Library/LaunchDaemons/com.trusttunnel.client.plist
 launchctl load ~/Library/LaunchAgents/com.trusttunnel.tray.plist
 ```
 
+**Important:** Make sure no other `trusttunnel_client` instances are running before loading the LaunchDaemon. Only one instance can run at a time (route/tun conflict).
+
 ## Uninstall
 
 ### Linux
