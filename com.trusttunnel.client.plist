@@ -20,5 +20,15 @@
     <string>/opt/trusttunnel_client/trusttunnel.log</string>
     <key>StandardErrorPath</key>
     <string>/opt/trusttunnel_client/trusttunnel.log</string>
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>65536</integer>
+    </dict>
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>65536</integer>
+    </dict>
 </dict>
 </plist>
