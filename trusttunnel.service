@@ -1,0 +1,14 @@
+[Unit]
+Description=TrustTunnel VPN Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/trusttunnel_client/trusttunnel_client -c /opt/trusttunnel_client/trusttunnel_client.toml
+WorkingDirectory=/opt/trusttunnel_client
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

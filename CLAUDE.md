@@ -19,12 +19,13 @@ cmake -B build -DCMAKE_PREFIX_PATH="$(brew --prefix qt)" && cmake --build build
 - **Single class design**: `TrayAgent` (QObject) owns `QSystemTrayIcon`, `QMenu`, `QTimer`
 - Icons are drawn at runtime via `QPainter` + `QSvgRenderer` on 64x64 `QPixmap` (no icon files needed)
 - Platform-specific code via `#ifdef Q_OS_LINUX` / `#ifdef Q_OS_MACOS`
+- D-Bus/launchctl errors shown as tray notifications + `qWarning()`
 - Status polling every 3s
 - Transitioning state (yellow icon) auto-clears after poll interval + 1s
 
 ### Linux specifics
 
-- Service control via Qt D-Bus (`org.freedesktop.systemd1.Manager`)
+- Service control via Qt D-Bus (`org.freedesktop.systemd1.Manager`) with interactive auth
 - Status: `systemctl is-active trusttunnel` + `/sys/class/net/tun0`
 - Polkit: uses systemd's built-in `org.freedesktop.systemd1.manage-units` (auth_admin_keep)
 
@@ -37,10 +38,28 @@ cmake -B build -DCMAKE_PREFIX_PATH="$(brew --prefix qt)" && cmake --build build
 - LaunchAgent (`com.trusttunnel.tray`) for tray auto-start at login
 - Only one trusttunnel_client instance can run (route/tun conflict if duplicated)
 
+## Versioning
+
+- Single source of truth: `CMakeLists.txt` → `project(trusttunnel-tray VERSION X.Y.Z ...)`
+- `PKGBUILD` reads version automatically via `pkgver()` from CMakeLists.txt
+- CI (`release.yml`) uses `makepkg` which calls `pkgver()` — no manual sync needed
+
+## Packaging (Arch Linux)
+
+- `PKGBUILD` in repo root; build with `makepkg -si`
+- Binary → `/usr/bin/trusttunnel-tray`
+- Systemd unit → `/usr/lib/systemd/system/trusttunnel.service`
+- Autostart → `/etc/xdg/autostart/trusttunnel-tray.desktop`
+- `BUILDDIR=makepkg-builddir` to avoid conflict with `src/` source directory
+- CI release produces `.pkg.tar.zst` artifact
+
 ## Key Paths
 
 - Config: `/opt/trusttunnel_client/trusttunnel_client.toml`
 - Install dir: `/opt/trusttunnel_client/`
+- Linux binary (PKGBUILD): `/usr/bin/trusttunnel-tray`
+- Linux service (PKGBUILD): `/usr/lib/systemd/system/trusttunnel.service`
+- Linux autostart (PKGBUILD): `/etc/xdg/autostart/trusttunnel-tray.desktop`
 - Linux service name: `trusttunnel`
 - macOS daemon plist: `/Library/LaunchDaemons/com.trusttunnel.client.plist`
 - macOS agent plist: `~/Library/LaunchAgents/com.trusttunnel.tray.plist`

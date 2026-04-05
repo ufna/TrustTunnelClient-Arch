@@ -1,2 +1,6 @@
 build/
 .claude/
+
+# makepkg artifacts
+makepkg-builddir/
+*.pkg.tar.zst
