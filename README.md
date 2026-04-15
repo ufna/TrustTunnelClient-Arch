@@ -66,6 +66,26 @@ cmake --build build
 
 ## Install
 
+### macOS — prebuilt tarball (recommended for end users)
+
+`make-dist.sh` produces a self-contained `trusttunnel-macos-<version>-universal.tar.gz` that bundles Qt 6.5.3 inside the `.app`, ships the VPN client binaries, and is signed ad-hoc. It runs on **macOS 12 Monterey and newer** on both Intel and Apple Silicon.
+
+Build the tarball (on the developer machine):
+
+```bash
+./make-dist.sh
+```
+
+First run will fetch Qt 6.5.3 LTS from a Qt mirror into `~/.local/Qt-6.5.3` (~130 MB). Requires `curl` and `p7zip` (`brew install p7zip`); Homebrew Qt is not used.
+
+Install the tarball (on the end-user machine):
+
+```bash
+cd ~/Downloads && tar xzf trusttunnel-macos-<version>-universal.tar.gz && cd trusttunnel-macos-<version>-universal && xattr -dr com.apple.quarantine . && ./install.sh
+```
+
+The embedded `install.sh` copies binaries into `/opt/trusttunnel_client/`, loads `com.trusttunnel.client` LaunchDaemon (VPN at boot) and `com.trusttunnel.tray` LaunchAgent (tray at login). An existing `trusttunnel_client.toml` is preserved.
+
 ### Arch Linux (recommended)
 
 ```bash
@@ -85,13 +105,13 @@ sudo systemctl enable --now trusttunnel
 
 Service management uses systemd's built-in polkit policy (`org.freedesktop.systemd1.manage-units`). The first action per session will ask for your password; subsequent actions require no re-authentication.
 
-### macOS
+### macOS (build from source)
 
 ```bash
 ./install.sh
 ```
 
-The script builds the `.app` bundle, copies it to `/opt/trusttunnel_client/`, and installs LaunchDaemon + LaunchAgent for auto-start.
+The script builds the `.app` bundle against Homebrew Qt, copies it to `/opt/trusttunnel_client/`, and installs LaunchDaemon + LaunchAgent for auto-start. The resulting build inherits the host SDK's `minos` and requires Homebrew Qt on the running machine — use `make-dist.sh` for shareable, self-contained bundles.
 
 After install, start without rebooting:
 
@@ -139,7 +159,8 @@ Info.plist                      - macOS app bundle config (LSUIElement)
 src/main.cpp                    - Entry point
 src/TrayAgent.h                 - TrayAgent class declaration
 src/TrayAgent.cpp               - TrayAgent implementation (#ifdef per platform)
-install.sh                      - Cross-platform installation script (fallback)
+install.sh                      - Cross-platform source-install script
+make-dist.sh                    - Standalone macOS tarball builder (fetches Qt 6.5.3 LTS)
 trusttunnel.service             - Linux systemd service (VPN at boot)
 trusttunnel-tray.desktop        - Linux autostart desktop entry
 com.trusttunnel.client.plist    - macOS LaunchDaemon (VPN at boot)

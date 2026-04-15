@@ -1,6 +1,11 @@
 build/
+build-*/
 .claude/
 
 # makepkg artifacts
 makepkg-builddir/
 *.pkg.tar.zst
+
+# make-dist.sh artifacts
+trusttunnel-macos-*.tar.gz
+aqtinstall.log
