@@ -44,6 +44,11 @@ cd ~/Downloads && tar xzf trusttunnel-macos-<version>-universal.tar.gz && cd tru
 
 The embedded `install.sh` is idempotent: it copies into `/opt/trusttunnel_client/`, (re)loads `com.trusttunnel.client` LaunchDaemon and `com.trusttunnel.tray` LaunchAgent, and preserves an existing `trusttunnel_client.toml` if one is already present.
 
+### Known issues
+
+- **Universal `trusttunnel_client` binary fails to exec on macOS 12 Monterey Intel.** The Adguard-supplied universal Mach-O (Developer ID signed, hardened runtime, `VersionMin=10.15.0`, valid `lipo` fat header) gets `Killed: 9` immediately on `execve` on Monterey 12.7.6 Intel — both via launchd (`last exit reason = OS_REASON_EXEC`, infinite respawn loop) and via direct `sudo ./trusttunnel_client`. **Same binary works on Apple Silicon** (kernel selects arm64 slice) and presumably on Ventura+ Intel. Workaround on the affected machine: `lipo -thin x86_64 trusttunnel_client -output thin && sudo cp thin /opt/trusttunnel_client/trusttunnel_client`. Root cause unknown — may be a quirk of this specific Adguard build, or a Monterey kernel issue with this fat header layout. If users on Monterey Intel report the daemon respawn-looping with no log output, this is why.
+- **Qt frameworks are signed ad-hoc** (`codesign --force --deep --sign -` after macdeployqt). `amfid` logs `signature not valid: -67050` for QtCore/QtGui/QtDBus/libqcocoa/libqmacstyle on every tray launch. The tray still starts because the user's gui domain is permissive about agent loads, but a future macOS release may tighten this. For production distribution the bundle should be signed with a Developer ID and notarized.
+
 ## Architecture
 
 - **Single class design**: `TrayAgent` (QObject) owns `QSystemTrayIcon`, `QMenu`, `QTimer`
