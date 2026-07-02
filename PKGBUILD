@@ -1,12 +1,12 @@
 # Maintainer: ufna <ufna@ufna.dev>
 pkgname=trusttunnel-tray
-pkgver=1.3.0
+pkgver=1.5.0
 pkgrel=1
 pkgdesc='System tray agent for TrustTunnel VPN client'
 arch=('x86_64')
 url='https://github.com/ufna/TrustTunnelClient-Arch'
 license=('custom')
-depends=('qt6-base' 'qt6-svg')
+depends=('qt6-base' 'qt6-svg' 'polkit')
 makedepends=('cmake')
 options=('!debug')
 
@@ -28,6 +28,9 @@ package() {
 
     install -Dm644 "$startdir/trusttunnel.service" \
         "$pkgdir/usr/lib/systemd/system/trusttunnel.service"
+
+    install -Dm644 "$startdir/trusttunnel.rules" \
+        "$pkgdir/etc/polkit-1/rules.d/49-trusttunnel.rules"
 
     install -Dm644 "$startdir/trusttunnel-tray.desktop" \
         "$pkgdir/etc/xdg/autostart/trusttunnel-tray.desktop"

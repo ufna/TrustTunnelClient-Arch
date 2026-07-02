@@ -63,6 +63,17 @@ The embedded `install.sh` is idempotent: it copies into `/opt/trusttunnel_client
 - Service control via Qt D-Bus (`org.freedesktop.systemd1.Manager`) with interactive auth
 - Status: `systemctl is-active trusttunnel` + `/sys/class/net/tun0`
 - Polkit: uses systemd's built-in `org.freedesktop.systemd1.manage-units` (auth_admin_keep)
+- **Passwordless operation**: `trusttunnel.rules` is installed to `/etc/polkit-1/rules.d/49-trusttunnel.rules` and returns `YES` for `manage-units` scoped to `trusttunnel.service` for active local `wheel` users. This covers `StartUnit`/`StopUnit`/`RestartUnit` **and** `KillUnit`, so the tray can switch profiles and reconnect without a password prompt. The same D-Bus code path falls back to the normal polkit prompt if the rule is absent.
+
+### Profiles
+
+- Profile files live in `/opt/trusttunnel_client/profiles/<name>.toml` (each is a full `trusttunnel_client.toml`).
+- The active config `/opt/trusttunnel_client/trusttunnel_client.toml` is a **relative symlink** to the active profile (`profiles/<name>.toml`). The daemon reads this path unchanged; the symlink resolves transparently.
+- First launch migrates the existing flat config into `profiles/default.toml` and repoints the path to a symlink.
+- Switching a profile = repoint the symlink + `RestartUnit` (passwordless via the polkit rule).
+- "New profile from current…" seeds a new file from the active profile and opens it in the editor.
+- "Edit current profile" edits the symlink target (the profile source) directly; restart to apply.
+- Status line and tooltip show the active profile name (e.g. `TrustTunnel: Connected — work`).
 
 ### macOS specifics
 
@@ -90,7 +101,9 @@ The embedded `install.sh` is idempotent: it copies into `/opt/trusttunnel_client
 
 ## Key Paths
 
-- Config: `/opt/trusttunnel_client/trusttunnel_client.toml`
+- Config: `/opt/trusttunnel_client/trusttunnel_client.toml` (symlink → active profile)
+- Profiles dir: `/opt/trusttunnel_client/profiles/<name>.toml`
+- Polkit rule: `/etc/polkit-1/rules.d/49-trusttunnel.rules`
 - Install dir: `/opt/trusttunnel_client/`
 - Linux binary (PKGBUILD): `/usr/bin/trusttunnel-tray`
 - Linux service (PKGBUILD): `/usr/lib/systemd/system/trusttunnel.service`

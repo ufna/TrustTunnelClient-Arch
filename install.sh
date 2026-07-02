@@ -49,6 +49,11 @@ else
     sudo systemctl daemon-reload
     sudo systemctl enable trusttunnel.service
 
+    # Polkit rule: let the active user start/stop/restart the service without a
+    # password prompt (needed for passwordless profile switching from the tray).
+    sudo install -Dm644 "${SCRIPT_DIR}/trusttunnel.rules" \
+        /etc/polkit-1/rules.d/49-trusttunnel.rules
+
     # Desktop autostart for tray icon (runs as user at login)
     mkdir -p "${HOME}/.config/autostart"
     cp "${SCRIPT_DIR}/trusttunnel-tray.desktop" "${HOME}/.config/autostart/trusttunnel-tray.desktop"
@@ -61,4 +66,8 @@ else
     echo "  ${INSTALL_DIR}/trusttunnel-tray"
     echo ""
     echo "Both will auto-start on next boot/login."
+    echo ""
+    echo "Profiles live in ${INSTALL_DIR}/profiles/<name>.toml. The active"
+    echo "config (${INSTALL_DIR}/trusttunnel_client.toml) is a symlink to the"
+    echo "active profile. Switch profiles from the tray menu — no sudo needed."
 fi

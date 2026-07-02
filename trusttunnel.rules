@@ -1,0 +1,14 @@
+// Allow active local users in the wheel group to start/stop/restart and send
+// signals to the TrustTunnel VPN service without a password prompt.
+//
+// This lets the tray agent switch profiles and reconnect without sudo.
+// Scoped to a single unit (trusttunnel.service) and to local active sessions.
+polkit.addRule(function(action, subject) {
+    if (action.id === "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") === "trusttunnel.service" &&
+        subject.local &&
+        subject.active &&
+        subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+    }
+});

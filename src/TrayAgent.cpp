@@ -5,7 +5,10 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QInputDialog>
+#include <QActionGroup>
 #include <QSvgRenderer>
 #include <QDebug>
 
@@ -23,6 +26,10 @@ TrayAgent::TrayAgent(QObject *parent)
     m_greenIcon = makeIcon(QColor(0x4C, 0xAF, 0x50));
     m_redIcon = makeIcon(QColor(0xF4, 0x43, 0x36));
     m_yellowIcon = makeIcon(QColor(0xFF, 0xC1, 0x07));
+    m_greyIcon = makeIcon(QColor(0x9E, 0x9E, 0x9E));
+
+    ensureProfilesMigrated();
+    m_activeProfile = activeProfileName();
 
     m_statusAction = new QAction("TrustTunnel: Disconnected", this);
     m_statusAction->setEnabled(false);
@@ -33,8 +40,8 @@ TrayAgent::TrayAgent(QObject *parent)
     auto *restartAction = new QAction("Restart", this);
     connect(restartAction, &QAction::triggered, this, &TrayAgent::onRestart);
 
-    auto *editConfigAction = new QAction("Edit Config", this);
-    connect(editConfigAction, &QAction::triggered, this, &TrayAgent::onEditConfig);
+    m_editAction = new QAction("Edit current profile", this);
+    connect(m_editAction, &QAction::triggered, this, &TrayAgent::onEditConfig);
 
     auto *viewLogsAction = new QAction("View Logs", this);
     connect(viewLogsAction, &QAction::triggered, this, &TrayAgent::onViewLogs);
@@ -42,13 +49,25 @@ TrayAgent::TrayAgent(QObject *parent)
     auto *quitAction = new QAction("Quit", this);
     connect(quitAction, &QAction::triggered, qApp, &QApplication::quit);
 
+    // --- Profile submenu ---
+    m_profileGroup = new QActionGroup(this);
+    m_profileGroup->setExclusive(true);
+    m_profileMenu = new QMenu();
+    connect(m_profileMenu, &QMenu::aboutToShow, this, &TrayAgent::rebuildProfileMenu);
+    rebuildProfileMenu();
+
+    auto *profileMenuAction = new QAction("Profile", this);
+    profileMenuAction->setMenu(m_profileMenu);
+
     m_menu = new QMenu();
     m_menu->addAction(m_statusAction);
     m_menu->addSeparator();
     m_menu->addAction(m_toggleAction);
     m_menu->addAction(restartAction);
     m_menu->addSeparator();
-    m_menu->addAction(editConfigAction);
+    m_menu->addAction(profileMenuAction);
+    m_menu->addSeparator();
+    m_menu->addAction(m_editAction);
     m_menu->addAction(viewLogsAction);
     m_menu->addSeparator();
     m_menu->addAction(quitAction);
@@ -96,6 +115,190 @@ QIcon TrayAgent::makeIcon(const QColor &dotColor)
 
     return QIcon(pixmap);
 }
+
+// --- Profiles ---
+
+void TrayAgent::ensureProfilesMigrated()
+{
+    QDir().mkpath(PROFILES_DIR);
+
+    QFileInfo cfg(CONFIG_PATH);
+    if (cfg.isSymLink())
+        return; // already migrated
+
+    // Regular file (or missing) -> fold into profiles/default.toml and point a
+    // relative symlink at it. The daemon keeps reading CONFIG_PATH; the symlink
+    // transparently resolves to the active profile.
+    const QString defaultPath = profilePath("default");
+    if (!QFileInfo::exists(defaultPath) && cfg.exists())
+        QFile::copy(CONFIG_PATH, defaultPath);
+
+    if (QFileInfo::exists(CONFIG_PATH))
+        QFile::remove(CONFIG_PATH);
+    if (!QFile::link(QStringLiteral("profiles/default.toml"), CONFIG_PATH))
+        qWarning() << "Failed to create profile symlink at" << CONFIG_PATH;
+}
+
+QStringList TrayAgent::listProfiles() const
+{
+    QDir dir(PROFILES_DIR);
+    if (!dir.exists())
+        return {};
+
+    QStringList names;
+    const QStringList files = dir.entryList({"*.toml"}, QDir::Files, QDir::Name);
+    for (const auto &f : files)
+        names << QFileInfo(f).completeBaseName();
+    return names;
+}
+
+QString TrayAgent::activeProfileName() const
+{
+    QFileInfo cfg(CONFIG_PATH);
+    if (cfg.isSymLink())
+        return QFileInfo(cfg.symLinkTarget()).completeBaseName();
+    return {};
+}
+
+QString TrayAgent::profilePath(const QString &name) const
+{
+    return QString(PROFILES_DIR) + '/' + name + ".toml";
+}
+
+void TrayAgent::rebuildProfileMenu()
+{
+    m_profileMenu->clear();
+    m_activeProfile = activeProfileName();
+
+    const QStringList profiles = listProfiles();
+    for (const auto &name : profiles) {
+        QAction *a = m_profileMenu->addAction(name);
+        a->setCheckable(true);
+        a->setActionGroup(m_profileGroup);
+        a->setChecked(name == m_activeProfile);
+        connect(a, &QAction::triggered, this, [this, name]() { switchProfile(name); });
+    }
+
+    if (profiles.isEmpty()) {
+        QAction *empty = m_profileMenu->addAction("(no profiles)");
+        empty->setEnabled(false);
+    }
+
+    m_profileMenu->addSeparator();
+    QAction *newAction = m_profileMenu->addAction("New profile from current…");
+    connect(newAction, &QAction::triggered, this, &TrayAgent::onNewProfile);
+
+    // Reflect the active name in the Edit action.
+    m_editAction->setText(m_activeProfile.isEmpty()
+                              ? QStringLiteral("Edit current profile")
+                              : QStringLiteral("Edit \"%1\"").arg(m_activeProfile));
+}
+
+void TrayAgent::switchProfile(const QString &name)
+{
+    if (name.isEmpty() || name == m_activeProfile)
+        return;
+
+    const QString target = profilePath(name);
+    if (!QFileInfo::exists(target)) {
+        m_trayIcon->showMessage("TrustTunnel", "Profile not found: " + name,
+                                QSystemTrayIcon::Warning, 5000);
+        return;
+    }
+
+    // Repoint the active config symlink atomically: create a temp symlink, then
+    // rename it over the existing one (same filesystem => atomic swap).
+    const QString rel = QStringLiteral("profiles/") + name + ".toml";
+    const QString tmp = QString(CONFIG_PATH) + ".tmp";
+    if (QFileInfo::exists(tmp))
+        QFile::remove(tmp);
+    if (!QFile::link(rel, tmp)) {
+        m_trayIcon->showMessage("TrustTunnel", "Failed to switch profile",
+                                QSystemTrayIcon::Critical, 5000);
+        return;
+    }
+    if (!QFile::rename(tmp, CONFIG_PATH)) {
+        QFile::remove(tmp);
+        m_trayIcon->showMessage("TrustTunnel", "Failed to switch profile",
+                                QSystemTrayIcon::Critical, 5000);
+        return;
+    }
+
+    m_activeProfile = name;
+    m_editAction->setText(QStringLiteral("Edit \"%1\"").arg(name));
+    rebuildProfileMenu();
+
+    // Apply by restarting the daemon so it re-reads the new profile.
+    setTransitioning();
+    if (isServiceActive()) {
+#ifdef Q_OS_LINUX
+        runDBus("RestartUnit");
+#endif
+#ifdef Q_OS_MACOS
+        runLaunchctl("restart");
+#endif
+    } else {
+        m_trayIcon->showMessage("TrustTunnel",
+            QStringLiteral("Profile set to \"%1\". Start the service to connect.").arg(name),
+            QSystemTrayIcon::Information, 5000);
+    }
+}
+
+void TrayAgent::onNewProfile()
+{
+    bool ok = false;
+    const QString name = QInputDialog::getText(nullptr,
+        QStringLiteral("New TrustTunnel profile"),
+        QStringLiteral("Profile name:"), QLineEdit::Normal, QString(), &ok).trimmed();
+    if (!ok || name.isEmpty())
+        return;
+
+    if (name.contains('/') || name.contains('\\') ||
+        name.contains("..") || name.contains(':')) {
+        m_trayIcon->showMessage("TrustTunnel", "Invalid profile name",
+                                QSystemTrayIcon::Warning, 5000);
+        return;
+    }
+
+    const QString path = profilePath(name);
+    if (QFileInfo::exists(path)) {
+        m_trayIcon->showMessage("TrustTunnel", "Profile already exists: " + name,
+                                QSystemTrayIcon::Warning, 5000);
+        return;
+    }
+
+    // Seed from the current active config (canonical target = current profile).
+    const QString src = QFileInfo(CONFIG_PATH).canonicalFilePath();
+    if (!src.isEmpty() && QFileInfo::exists(src)) {
+        QFile::copy(src, path);
+    } else {
+        QFile f(path);
+        if (f.open(QIODevice::WriteOnly)) // empty placeholder
+            f.close();
+    }
+
+    rebuildProfileMenu();
+    openEditor(path);
+    m_trayIcon->showMessage("TrustTunnel",
+        QStringLiteral("Created profile \"%1\". Edit it, then switch to apply.").arg(name),
+        QSystemTrayIcon::Information, 6000);
+}
+
+// --- Platform-specific: editor ---
+
+#ifdef Q_OS_LINUX
+void TrayAgent::openEditor(const QString &path)
+{
+    QProcess::startDetached("xdg-open", {path});
+}
+#endif
+
+#ifdef Q_OS_MACOS
+void TrayAgent::openEditor(const QString &path)
+{
+    QProcess::startDetached("open", {"-t", path});
+}
+#endif
 
 // --- Platform-specific: service status ---
 
@@ -210,6 +413,13 @@ void TrayAgent::setTransitioning()
 
 void TrayAgent::pollStatus()
 {
+    if (!QFileInfo(CONFIG_PATH).exists()) {
+        m_state = State::NoConfig;
+        m_connected = false;
+        updateTray();
+        return;
+    }
+
     bool active = isServiceActive();
     bool tun = isTunUp();
     m_connected = active && tun;
@@ -223,23 +433,36 @@ void TrayAgent::pollStatus()
 
 void TrayAgent::updateTray()
 {
+    const QString label = m_activeProfile.isEmpty()
+                              ? QString()
+                              : QStringLiteral(" — %1").arg(m_activeProfile);
+
     switch (m_state) {
     case State::Connected:
         m_trayIcon->setIcon(m_greenIcon);
-        m_trayIcon->setToolTip("TrustTunnel: Connected");
-        m_statusAction->setText("TrustTunnel: Connected");
+        m_trayIcon->setToolTip("TrustTunnel: Connected" + label);
+        m_statusAction->setText("TrustTunnel: Connected" + label);
         m_toggleAction->setText("Disable");
+        m_toggleAction->setEnabled(true);
         break;
     case State::Disconnected:
         m_trayIcon->setIcon(m_redIcon);
-        m_trayIcon->setToolTip("TrustTunnel: Disconnected");
-        m_statusAction->setText("TrustTunnel: Disconnected");
+        m_trayIcon->setToolTip("TrustTunnel: Disconnected" + label);
+        m_statusAction->setText("TrustTunnel: Disconnected" + label);
         m_toggleAction->setText("Enable");
+        m_toggleAction->setEnabled(true);
         break;
     case State::Transitioning:
         m_trayIcon->setIcon(m_yellowIcon);
-        m_trayIcon->setToolTip("TrustTunnel: Transitioning...");
-        m_statusAction->setText("TrustTunnel: Transitioning...");
+        m_trayIcon->setToolTip("TrustTunnel: Switching..." + label);
+        m_statusAction->setText("TrustTunnel: Switching..." + label);
+        break;
+    case State::NoConfig:
+        m_trayIcon->setIcon(m_greyIcon);
+        m_trayIcon->setToolTip("TrustTunnel: No profile configured");
+        m_statusAction->setText("TrustTunnel: No profile configured");
+        m_toggleAction->setText("Enable");
+        m_toggleAction->setEnabled(false);
         break;
     }
 }
@@ -276,19 +499,12 @@ void TrayAgent::onRestart()
 
 // --- Platform-specific: edit config ---
 
-#ifdef Q_OS_LINUX
 void TrayAgent::onEditConfig()
 {
-    QProcess::startDetached("xdg-open", {CONFIG_PATH});
+    // CONFIG_PATH is a symlink to the active profile, so editing it edits the
+    // profile source directly. Restart the service to apply changes.
+    openEditor(CONFIG_PATH);
 }
-#endif
-
-#ifdef Q_OS_MACOS
-void TrayAgent::onEditConfig()
-{
-    QProcess::startDetached("open", {"-t", CONFIG_PATH});
-}
-#endif
 
 // --- Platform-specific: view logs ---
 
