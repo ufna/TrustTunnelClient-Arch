@@ -9,16 +9,19 @@ Cross-platform system tray agent for managing the TrustTunnel VPN client. Built 
 
 ## Features
 
-- Tray icon with color status: green (connected), red (disconnected), yellow (transitioning)
+- Tray icon with color status: green (connected), red (disconnected), yellow (transitioning), grey (no profile configured)
 - Enable/Disable/Restart the VPN client
-- Edit config file (`trusttunnel_client.toml`)
+- **Profile switching** — keep multiple configs (`profiles/<name>.toml`) and switch between them from the tray (reconnects to apply)
+- New profile from current; edit the active profile in your default editor
 - View live logs
 - Status polling every 3 seconds
+- **Passwordless operation on Linux** — a polkit rule lets active `wheel` users start/stop/restart the service without a password prompt
 
 ### Linux (Arch)
 
 - Service control via D-Bus (`org.freedesktop.systemd1.Manager`)
 - Status: `systemctl is-active` + `/sys/class/net/tun0`
+- Passwordless service control via a polkit rule scoped to `trusttunnel.service` (falls back to the normal polkit prompt if absent)
 - Logs via `journalctl` in konsole/gnome-terminal/xterm
 - Autostart via `/etc/xdg/autostart/` desktop entry (PKGBUILD) or `~/.config/autostart/` (manual)
 
@@ -35,11 +38,12 @@ Cross-platform system tray agent for managing the TrustTunnel VPN client. Built 
 
 - Qt6 (Widgets, SvgWidgets; + DBus on Linux)
 - CMake >= 3.16
+- `polkit` (Linux) — for the passwordless service-control rule
 
 ### Arch Linux
 
 ```bash
-sudo pacman -S qt6-base qt6-svg cmake
+sudo pacman -S qt6-base qt6-svg cmake polkit
 ```
 
 ### macOS
@@ -96,6 +100,7 @@ This builds and installs the `trusttunnel-tray` package with proper Arch paths:
 - Binary: `/usr/bin/trusttunnel-tray`
 - Systemd service: `/usr/lib/systemd/system/trusttunnel.service`
 - Autostart: `/etc/xdg/autostart/trusttunnel-tray.desktop`
+- Polkit rule: `/etc/polkit-1/rules.d/49-trusttunnel.rules`
 
 After install, enable and start the VPN service:
 
@@ -103,7 +108,16 @@ After install, enable and start the VPN service:
 sudo systemctl enable --now trusttunnel
 ```
 
-Service management uses systemd's built-in polkit policy (`org.freedesktop.systemd1.manage-units`). The first action per session will ask for your password; subsequent actions require no re-authentication.
+Service management uses systemd's built-in polkit policy (`org.freedesktop.systemd1.manage-units`). The installed `trusttunnel.rules` returns `YES` for `manage-units` scoped to `trusttunnel.service` for active local `wheel` users, so the tray can Enable/Disable/Restart and switch profiles **without a password**. If the rule is absent, the normal polkit password prompt is used instead.
+
+### Profiles
+
+VPN profiles are full `trusttunnel_client.toml` files stored in `/opt/trusttunnel_client/profiles/<name>.toml`. The active config `/opt/trusttunnel_client/trusttunnel_client.toml` is a relative symlink to the active profile, so the daemon reads its path unchanged. On first launch the tray migrates any existing flat config into `profiles/default.toml` and repoints the path to a symlink.
+
+Use the tray's **Profile** submenu to:
+- Switch the active profile (repoints the symlink and restarts the service — passwordless)
+- Create a new profile seeded from the current one
+- Edit the active profile in your default text editor (restart to apply)
 
 ### macOS (build from source)
 
@@ -135,6 +149,7 @@ pacman -R trusttunnel-tray
 ```bash
 sudo systemctl disable --now trusttunnel.service
 sudo rm /etc/systemd/system/trusttunnel.service
+sudo rm /etc/polkit-1/rules.d/49-trusttunnel.rules
 sudo systemctl daemon-reload
 sudo rm /opt/trusttunnel_client/trusttunnel-tray
 rm ~/.config/autostart/trusttunnel-tray.desktop
@@ -163,6 +178,7 @@ install.sh                      - Cross-platform source-install script
 make-dist.sh                    - Standalone macOS tarball builder (fetches Qt 6.5.3 LTS)
 trusttunnel.service             - Linux systemd service (VPN at boot)
 trusttunnel-tray.desktop        - Linux autostart desktop entry
+trusttunnel.rules               - Linux polkit rule (passwordless service control)
 com.trusttunnel.client.plist    - macOS LaunchDaemon (VPN at boot)
 com.trusttunnel.tray.plist      - macOS LaunchAgent (tray at login)
 ```
