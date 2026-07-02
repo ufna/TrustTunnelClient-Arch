@@ -11,6 +11,7 @@
 #include <QActionGroup>
 #include <QSvgRenderer>
 #include <QDebug>
+#include <cstdio>
 
 #ifdef Q_OS_LINUX
 #include <QDBusConnection>
@@ -207,7 +208,9 @@ void TrayAgent::switchProfile(const QString &name)
     }
 
     // Repoint the active config symlink atomically: create a temp symlink, then
-    // rename it over the existing one (same filesystem => atomic swap).
+    // rename it over the existing one. QFile::rename does NOT overwrite an
+    // existing destination, so use POSIX rename(2) (same filesystem => atomic
+    // swap, replaces the old symlink in place).
     const QString rel = QStringLiteral("profiles/") + name + ".toml";
     const QString tmp = QString(CONFIG_PATH) + ".tmp";
     if (QFileInfo::exists(tmp))
@@ -217,7 +220,8 @@ void TrayAgent::switchProfile(const QString &name)
                                 QSystemTrayIcon::Critical, 5000);
         return;
     }
-    if (!QFile::rename(tmp, CONFIG_PATH)) {
+    if (std::rename(QFile::encodeName(tmp).constData(),
+                    QFile::encodeName(CONFIG_PATH).constData()) != 0) {
         QFile::remove(tmp);
         m_trayIcon->showMessage("TrustTunnel", "Failed to switch profile",
                                 QSystemTrayIcon::Critical, 5000);
