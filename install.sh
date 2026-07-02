@@ -21,6 +21,12 @@ echo "[2/3] Installing..."
 if [ "$OS" = "Darwin" ]; then
     sudo cp -R "${SCRIPT_DIR}/build/trusttunnel-tray.app" "${INSTALL_DIR}/trusttunnel-tray.app"
 
+    # Ad-hoc sign the bundle. macOS 26+ kills launchd-spawned apps whose only
+    # signature is the linker's ad-hoc one (OS_REASON_CODESIGNING / Launch
+    # Constraint Violation). A bundle-level signature binds Info.plist and
+    # seals resources, which launchd accepts. make-dist.sh signs likewise.
+    sudo codesign --force --deep --sign - "${INSTALL_DIR}/trusttunnel-tray.app"
+
     echo "[3/3] Setting up auto-start..."
 
     # LaunchDaemon for VPN client (runs as root at boot)

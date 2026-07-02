@@ -83,6 +83,7 @@ The embedded `install.sh` is idempotent: it copies into `/opt/trusttunnel_client
 - LaunchDaemon (`com.trusttunnel.client`) for VPN auto-start at boot with `KeepAlive`
 - LaunchAgent (`com.trusttunnel.tray`) for tray auto-start at login
 - Only one trusttunnel_client instance can run (route/tun conflict if duplicated)
+- **Dev builds need ad-hoc signing**: `install.sh` runs `codesign --force --deep --sign -` on the built `.app`. macOS 26+ rejects launchd-spawned apps that carry only the linker's ad-hoc signature (`OS_REASON_CODESIGNING` / Launch Constraint Violation, exit -9); a bundle-level signature binds Info.plist and seals resources, which launchd accepts. `make-dist.sh` signs likewise after `macdeployqt`. No passwordless service control here — profile switching / restart go through `osascript ... with administrator privileges`.
 
 ## Versioning
 
