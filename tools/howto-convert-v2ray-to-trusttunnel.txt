@@ -1,0 +1,118 @@
+Конвертация конфига v2raya -> TrustTunnel Client
+=================================================
+
+Исходник: файл с правилами маршрутизации v2raya (формат v2ray routing rules).
+Результат: секция exclusions в TOML-конфиге TrustTunnel Client.
+
+Справка по формату TrustTunnel:
+  https://github.com/TrustTunnel/TrustTunnelClient/blob/master/trusttunnel/README.md#configuration-reference
+
+1. ПОНИМАНИЕ ЛОГИКИ
+-------------------
+v2raya:
+  - default:direct  — весь трафик идёт напрямую по умолчанию
+  - domain(...)->proxy  — конкретные домены/IP идут через прокси
+  - domain(...)->direct  — конкретные домены/IP идут напрямую (при default:direct избыточно,
+    но может переопределять более широкие proxy-правила)
+
+TrustTunnel:
+  - vpn_mode = "selective"  — только домены/IP из exclusions идут через VPN (остальное напрямую)
+  - vpn_mode = "general"    — всё через VPN, кроме exclusions
+
+Маппинг: default:direct + ->proxy правила  =>  vpn_mode = "selective" + exclusions = [список proxy-доменов]
+
+2. МАППИНГ ПРАВИЛ
+-----------------
+  v2ray формат                         ->  TrustTunnel exclusions
+  ─────────────────────────────────────────────────────────────────
+  domain(domain:example.com)->proxy    ->  "example.com"
+                                           (матчит домен + www.example.com)
+
+  domain(contains:keyword)->proxy      ->  НЕТ ТОЧНОГО АНАЛОГА в TrustTunnel
+                                           Нужно добавлять конкретные домены вручную.
+                                           Оставить комментарий в конфиге.
+
+  ip(1.2.3.4)->proxy                   ->  "1.2.3.4"
+  ip(1.2.3.0/24)->proxy                ->  "1.2.3.0/24"
+
+  ->direct правила                     ->  Не добавлять (это дефолт в selective mode)
+  Закомментированные строки (#)        ->  Пропускать
+  geoip:/geosite: правила              ->  Пропускать (нет аналога)
+
+3. ВАЖНО: МАТЧИНГ ДОМЕНОВ В TRUSTTUNNEL
+----------------------------------------
+  - "example.com"    — матчит example.com и www.example.com, НО НЕ sub.example.com
+  - "*.example.com"  — матчит sub.example.com, www.example.com, НО НЕ example.com
+  - Для полного покрытия нужны оба: "example.com" и "*.example.com"
+
+  В v2ray domain(domain:example.com) матчит домен и все поддомены.
+  Поэтому для точного соответствия в TrustTunnel нужно добавлять ОБА варианта:
+    "example.com",
+    "*.example.com",
+  Это было сделано для всех доменов в рабочем конфиге.
+
+4. ОГРАНИЧЕНИЯ
+--------------
+  - TrustTunnel НЕ поддерживает substring/contains-матчинг доменов.
+    Правила вроде domain(contains:porn)->proxy нельзя перенести точно.
+    Решение: добавить все известные конкретные домены вручную.
+
+  - TrustTunnel НЕ поддерживает geoip/geosite правила.
+
+5. ПОРЯДОК ДЕЙСТВИЙ
+-------------------
+  a) Прочитать v2ray конфиг
+  b) Отфильтровать только активные (не закомментированные) ->proxy правила
+  c) Извлечь домены из domain(domain:X) и IP из ip(X)
+  d) Убрать дубликаты
+  e) Сгруппировать по категориям для удобства чтения
+  f) Записать в exclusions = [...] в TOML формате
+  g) Установить vpn_mode = "selective"
+  h) Отметить комментариями contains-правила, которые не удалось перенести
+
+6. ПРИМЕНЕНИЕ К РАБОЧЕМУ КОНФИГУ
+---------------------------------
+  Конфиг TrustTunnel: /opt/trusttunnel_client/trusttunnel_client.toml
+
+  a) Сделать бекап: cp trusttunnel_client.toml trusttunnel_client.toml.bak
+  b) Заменить vpn_mode = "general" на vpn_mode = "selective"
+  c) Заменить exclusions = [] на exclusions = [... список из шага 5 ...]
+  d) Для каждого домена добавить также "*.домен" для покрытия поддоменов
+  e) Перезапустить клиент: sudo systemctl restart trusttunnel
+
+7. SYSTEMD-СЕРВИС
+-----------------
+  Файл: /etc/systemd/system/trusttunnel.service
+
+  [Unit]
+  Description=TrustTunnel VPN Client
+  After=network-online.target
+  Wants=network-online.target
+
+  [Service]
+  Type=simple
+  ExecStart=/opt/trusttunnel_client/trusttunnel_client -c /opt/trusttunnel_client/trusttunnel_client.toml
+  WorkingDirectory=/opt/trusttunnel_client
+  Restart=on-failure
+  RestartSec=5
+
+  [Install]
+  WantedBy=multi-user.target
+
+  Управление:
+    sudo systemctl start trusttunnel      # запуск
+    sudo systemctl stop trusttunnel       # остановка
+    sudo systemctl restart trusttunnel    # перезапуск
+    sudo systemctl status trusttunnel     # статус
+    sudo systemctl enable trusttunnel     # автозапуск при загрузке
+    journalctl -u trusttunnel -f          # лог в реальном времени
+
+8. ФАЙЛЫ
+---------
+  Рабочий конфиг:  /opt/trusttunnel_client/trusttunnel_client.toml
+  Бекап:           /opt/trusttunnel_client/trusttunnel_client.toml.bak
+
+  Вспомогательные (в /w/Utilities/trusttunnel-conf/):
+  - tmp_v2ray.conf           — исходный конфиг v2raya
+  - tmp_tt.conf              — промежуточный результат конвертации (только exclusions)
+  - convert_v2ray_to_tt.py   — скрипт-конвертер (Python)
